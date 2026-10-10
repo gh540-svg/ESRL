@@ -1,4 +1,4 @@
-"""PEFT adapter construction and vLLM worker helpers used by ESRL."""
+"""PEFT adapter construction and vLLM worker helpers used by all trainers."""
 
 from __future__ import annotations
 

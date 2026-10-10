@@ -1,4 +1,4 @@
-"""Focused PEFT model construction and group-relative updates for ESRL."""
+"""Focused PEFT model construction and updates for ESRL and Mode-SFT."""
 
 from __future__ import annotations
 
@@ -134,3 +134,29 @@ def update(
         torch.nn.utils.clip_grad_norm_(trainable, 1.0)
         optimizer.step()
     return total
+
+
+def mode_sft_update(student, optimizer, rollouts, prompt_lens, answers, mode):
+    """Apply SFT only to rollouts matching the unique modal pseudo-label."""
+    selected = [index for index, answer in enumerate(answers) if answer == mode]
+    if not selected:
+        return None
+    optimizer.zero_grad(set_to_none=True)
+    scale = 1.0 / len(selected)
+    total = 0.0
+    for index in selected:
+        loss = -C.sequence_logprob(
+            student,
+            rollouts[index],
+            _prompt_len(prompt_lens, index),
+            True,
+            "mean",
+        )
+        (loss * scale).backward()
+        total += float(loss.detach())
+    trainable = [
+        parameter for parameter in student.parameters() if parameter.requires_grad
+    ]
+    torch.nn.utils.clip_grad_norm_(trainable, 1.0)
+    optimizer.step()
+    return total * scale

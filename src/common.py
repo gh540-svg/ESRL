@@ -1,4 +1,4 @@
-"""Shared data, answer parsing, and loss utilities for ESRL."""
+"""Shared data, answer parsing, and loss utilities for ESRL and baselines."""
 
 from __future__ import annotations
 
