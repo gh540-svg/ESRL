@@ -1,4 +1,4 @@
-"""Focused PEFT model construction and updates for ESRL and Mode-SFT."""
+"""Focused PEFT model construction and updates for ESRL and SFT."""
 
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ def update(
     return total
 
 
-def mode_sft_update(student, optimizer, rollouts, prompt_lens, answers, mode):
+def sft_update(student, optimizer, rollouts, prompt_lens, answers, mode):
     """Apply SFT only to rollouts matching the unique modal pseudo-label."""
     selected = [index for index, answer in enumerate(answers) if answer == mode]
     if not selected:

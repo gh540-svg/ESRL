@@ -1,7 +1,7 @@
 #!/bin/bash -l
 # One training H200 plus one remote-vLLM rollout H200 for local baselines.
 # Usage: sbatch scripts/slurm_baselines_two_h200.sh METHOD DOMAIN MODEL_KEY [RUN_TAG [SEED]]
-# METHOD: es_direct | sft
+# METHOD: es | sft
 
 #SBATCH --partition=hopper140
 #SBATCH --nodes=2
@@ -15,14 +15,14 @@
 
 set -euo pipefail
 
-METHOD="${1:?METHOD is required: es_direct or sft}"
+METHOD="${1:?METHOD is required: es or sft}"
 DOMAIN="${2:?DOMAIN is required: math, knowledge, or medical}"
 MODEL_KEY="${3:-4b}"
 RUN_TAG="${4:-run_$(date +%Y%m%d_%H%M%S)}"
 SEED="${5:-0}"
 
 case "$METHOD" in
-    es_direct|sft) ;;
+    es|sft) ;;
     *) echo "unsupported method: $METHOD" >&2; exit 2 ;;
 esac
 
@@ -163,7 +163,7 @@ if [[ "$DOMAIN" != math ]]; then
 fi
 
 case "$METHOD" in
-    es_direct)
+    es)
         METHOD_ARGS=(
             --rollouts-per-member 1
             --sigma 0.001

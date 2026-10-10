@@ -10,7 +10,7 @@ class RepositoryConfigurationTests(unittest.TestCase):
     def test_trainers_are_explicit_and_separated(self):
         trainer_names = sorted(path.name for path in (ROOT / "src").glob("train_*.py"))
         self.assertEqual(
-            ["train_es_direct.py", "train_esrl.py", "train_sft.py"],
+            ["train_es.py", "train_esrl.py", "train_sft.py"],
             trainer_names,
         )
         launcher = (ROOT / "scripts" / "slurm_two_h200.sh").read_text()
@@ -19,8 +19,8 @@ class RepositoryConfigurationTests(unittest.TestCase):
             ROOT / "scripts" / "slurm_baselines_two_h200.sh"
         ).read_text()
         self.assertIn('TRAINER="train_${METHOD}.py"', baseline_launcher)
-        self.assertIn("es_direct|sft", baseline_launcher)
-        self.assertNotIn("esrl|es_direct|sft", baseline_launcher)
+        self.assertIn("es|sft", baseline_launcher)
+        self.assertNotIn("esrl|es|sft", baseline_launcher)
 
     def test_single_seed_matrix(self):
         submitter = (ROOT / "scripts" / "submit_matrix.sh").read_text()
@@ -53,7 +53,7 @@ class RepositoryConfigurationTests(unittest.TestCase):
         for repository in ("PRIME-RL/TTRL", "YujunZhou/EVOL-RL", "user683/ECHO"):
             self.assertIn(repository, readme)
             self.assertIn(repository, baselines)
-        self.assertIn("src/train_es_direct.py", baselines)
+        self.assertIn("src/train_es.py", baselines)
         self.assertIn("src/train_sft.py", baselines)
 
     def test_old_public_name_is_absent(self):

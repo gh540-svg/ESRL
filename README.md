@@ -45,11 +45,11 @@ ESRL/
 ├── scripts/
 │   ├── slurm_two_h200.sh            # one ESRL job
 │   ├── submit_matrix.sh             # 4 models × 3 domains
-│   └── slurm_baselines_two_h200.sh  # local ES-Direct / Mode-SFT jobs
+│   └── slurm_baselines_two_h200.sh  # local ES / SFT jobs
 ├── src/
 │   ├── train_esrl.py                # ESRL training loop
-│   ├── train_es_direct.py           # ES-Direct baseline
-│   ├── train_sft.py                 # label-free Mode-SFT baseline
+│   ├── train_es.py                  # ES baseline
+│   ├── train_sft.py                 # label-free SFT baseline
 │   ├── esrl_core.py                 # student construction and updates
 │   ├── common.py                    # data, prompts, parsing, and scoring
 │   ├── vllm_adapter.py              # PEFT/vLLM adapter utilities
@@ -126,8 +126,8 @@ The external reference implementations are:
 - [EVOL-RL](https://github.com/YujunZhou/EVOL-RL)
 - [ECHO](https://github.com/user683/ECHO)
 
-The repository also includes separate, runnable implementations of
-**ES-Direct** and label-free **Mode-SFT**. Their definitions, matched settings,
+The repository also includes separate, runnable implementations of the
+**ES** and label-free **SFT** baselines. Their definitions, matched settings,
 and launch commands are in [BASELINES.md](BASELINES.md).
 
 # ✅ Validation

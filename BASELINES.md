@@ -16,11 +16,11 @@ their own launcher so the paper configuration cannot be changed accidentally.
 These projects are linked rather than vendored. Follow each upstream
 repository for its own installation, license, and reproduction instructions.
 
-## Local ES-Direct baseline
+## Local ES baseline
 
-Implementation: [`src/train_es_direct.py`](src/train_es_direct.py)
+Implementation: [`src/train_es.py`](src/train_es.py)
 
-ES-Direct samples 16 LoRA perturbations for every prompt, generates one rollout
+ES samples 16 LoRA perturbations for every prompt, generates one rollout
 per population member, scores the population with the same modal pseudo-reward
 and confidence gate used by ESRL, and applies the reward-weighted ES parameter
 update directly. It does not backpropagate through the update.
@@ -39,16 +39,16 @@ Pinned settings:
 Example:
 
 ```bash
-sbatch --job-name=esdirect_q4_math \
+sbatch --job-name=es_q4_math \
   scripts/slurm_baselines_two_h200.sh \
-  es_direct math 4b tok8196_baselines 0
+  es math 4b tok8196_baselines 0
 ```
 
-## Local Mode-SFT baseline
+## Local SFT baseline
 
 Implementation: [`src/train_sft.py`](src/train_sft.py)
 
-Mode-SFT is label-free during adaptation. For each prompt, the current policy
+SFT is label-free during adaptation. For each prompt, the current policy
 generates 16 responses. When their extracted answers have a unique,
 non-unanimous mode that passes the confidence gate, the student receives
 supervised loss only on rollouts matching that modal pseudo-label. Gold

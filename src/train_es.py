@@ -1,4 +1,4 @@
-"""ES-Direct LoRA trainer with persistent vLLM multi-LoRA rollouts.
+"""ES LoRA trainer with persistent vLLM multi-LoRA rollouts.
 
 It preserves these experiment semantics:
 
@@ -286,12 +286,12 @@ def main():
     )
 
     print(
-        f"[es_direct_lora_vllm] vLLM={version} model={args.model} "
+        f"[es_lora_vllm] vLLM={version} model={args.model} "
         f"population={args.population} LoRA-r={args.lora_r} scale={scale:g}",
         flush=True,
     )
     print(
-        f"[es_direct_lora_vllm] {len(train_prompts)} {args.dataset} prompts x "
+        f"[es_lora_vllm] {len(train_prompts)} {args.dataset} prompts x "
         f"{args.epochs} epochs = {expected_visits} visits; "
         f"starting at {args.start_visit}; stopping at {target_visits}",
         flush=True,
@@ -335,7 +335,7 @@ def main():
         str(adapter_dir),
         scale,
     )
-    print(f"[es_direct_lora_vllm] GPU state: {sanity}", flush=True)
+    print(f"[es_lora_vllm] GPU state: {sanity}", flush=True)
 
     visits = args.start_visit
     used = skipped = 0
@@ -430,7 +430,7 @@ def main():
 
     save_centre(engine, output, adapter_dir)
     print(
-        f"[es_direct_lora_vllm] done. used={used} skipped={skipped}; "
+        f"[es_lora_vllm] done. used={used} skipped={skipped}; "
         f"saved -> {output}",
         flush=True,
     )
@@ -438,3 +438,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
