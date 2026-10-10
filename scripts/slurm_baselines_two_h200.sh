@@ -188,4 +188,3 @@ srun --nodes=1 --ntasks=1 --exclusive --nodelist="$TRAIN_NODE" \
     "${COMMON_ARGS[@]}" "${METHOD_ARGS[@]}"
 
 echo "[two-h200] complete: $ARM"
-

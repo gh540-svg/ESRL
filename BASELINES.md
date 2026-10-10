@@ -84,4 +84,3 @@ optimizer and learning parameters differ.
 | `math` | MATH-500 | `400 × 5` | `100` |
 | `knowledge` | MMLU | `500 × 4` | `200` |
 | `medical` | MedQA-USMLE | `500 × 4` | `200` |
-
