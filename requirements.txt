@@ -2,6 +2,7 @@
 # PyTorch build. The training code targets the vLLM 0.11.x V1 worker extension
 # API used by vllm_es_worker.py.
 vllm==0.11.0
+transformers>=4.51,<5
 datasets>=2.21,<4
 peft>=0.13,<1
 safetensors>=0.4

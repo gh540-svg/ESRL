@@ -43,7 +43,7 @@ class VLLMESWorkerExtension:
 
     @staticmethod
     def _internal_to_peft(module_key: str, matrix: str) -> str:
-        """Map a vLLM Qwen3 module/sub-layer to a PEFT safetensors key."""
+        """Map a packed Qwen/Llama vLLM module to a PEFT safetensors key."""
         module_name, marker, sub_text = module_key.partition("#sub")
         if marker:
             sub_index = int(sub_text)
@@ -54,10 +54,10 @@ class VLLMESWorkerExtension:
                 names = ("gate_proj", "up_proj")
                 module_name = module_name[:-len("gate_up_proj")] + names[sub_index]
             else:
-                raise RuntimeError(f"unsupported packed Qwen3 LoRA module {module_key!r}")
+                raise RuntimeError(f"unsupported packed LoRA module {module_key!r}")
         if not module_name.startswith("model."):
             raise RuntimeError(
-                f"unexpected Qwen3 LoRA module {module_name!r}; expected model.*"
+                f"unexpected LoRA module {module_name!r}; expected model.*"
             )
         return f"base_model.model.{module_name}.lora_{matrix}.weight"
 
@@ -112,7 +112,7 @@ class VLLMESWorkerExtension:
                     b_all[slot, 0, :output_dim, :rank],
                 )
         if not views:
-            raise RuntimeError("no active Qwen3 LoRA tensors were found")
+            raise RuntimeError("no active Qwen/Llama LoRA tensors were found")
         return views
 
     @torch.inference_mode()
@@ -296,7 +296,7 @@ class VLLMESWorkerExtension:
             "central_dtype": "float32",
             "population": len(self._es_adapter_ids),
             "lora_scale_folded_during_inference": self._es_scale,
-            "parameter_order": "sorted_vllm_qwen3_module_then_A_then_B",
+            "parameter_order": "sorted_vllm_module_then_A_then_B",
         }
         temporary_json = destination / "vllm_es_state.json.tmp"
         temporary_json.write_text(json.dumps(metadata, indent=2) + "\n")

@@ -1,7 +1,6 @@
-"""One-H200 ES-Direct LoRA trainer with persistent vLLM multi-LoRA rollouts.
+"""ES-Direct LoRA trainer with persistent vLLM multi-LoRA rollouts.
 
-This is an acceleration arm for ``train.py --method es_direct_lora_batch16``.
-It preserves the experiment semantics:
+It preserves these experiment semantics:
 
 * N independent parameter perturbations per prompt (default N=16)
 * one stochastic rollout from each population member
@@ -9,8 +8,9 @@ It preserves the experiment semantics:
 * one direct ES update per accepted prompt
 * 500-visit PEFT snapshots compatible with the existing evaluator
 
-The change is execution only: one persistent vLLM engine holds the Qwen3 base,
-the FP32 central LoRA, and all N perturbed LoRA inference slots on one GPU.
+The rollout H200 runs one persistent vLLM engine holding the Qwen/Llama base,
+    the FP32 central LoRA, and all N perturbed LoRA inference slots on one GPU.
+    The tensor layout supports Qwen2/Qwen3 and Llama decoder backbones.
 """
 from __future__ import annotations
 
@@ -47,17 +47,32 @@ def parse_args():
     parser.add_argument("--sigma", type=float, default=1e-3)
     parser.add_argument("--alpha", type=float, default=5e-4)
     parser.add_argument("--temp", type=float, default=0.8)
-    parser.add_argument("--max-new", type=int, default=256)
+    parser.add_argument("--max-new", type=int, default=8196)
     parser.add_argument("--p-high", type=float, default=0.95)
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--snap-every", type=int, default=500)
     parser.add_argument("--init-adapter", default=None)
     parser.add_argument("--start-visit", type=int, default=0)
+    parser.add_argument(
+        "--max-visits", type=int, default=None,
+        help="stop after exactly this many total prompt visits",
+    )
     parser.add_argument("--permute-choices", action="store_true")
     parser.add_argument("--dtype", default="bfloat16", choices=("float16", "bfloat16"))
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--max-model-len", type=int, default=4096)
-    parser.add_argument("--gpu-memory-utilization", type=float, default=0.90)
+    parser.add_argument(
+        "--data-seed", type=int, default=None,
+        help="dataset split/permutation seed; defaults to --seed",
+    )
+    parser.add_argument("--max-model-len", type=int, default=12292)
+    parser.add_argument(
+        "--max-num-batched-tokens", type=int, default=None,
+        help=(
+            "optional vLLM scheduler token budget; omission lets vLLM 0.11 "
+            "select its GPU-specific A100/H200 default"
+        ),
+    )
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.40)
     parser.add_argument(
         "--enforce-eager", action="store_true",
         help="disable CUDA graphs/compilation as a stability fallback",
@@ -71,8 +86,17 @@ def parse_args():
         parser.error("--lora-r is unsupported by vLLM")
     if args.sigma < 0 or args.alpha < 0:
         parser.error("--sigma and --alpha must be non-negative")
+    if args.seed < 0 or (args.data_seed is not None and args.data_seed < 0):
+        parser.error("--seed and --data-seed must be non-negative")
+    if args.max_visits is not None and args.max_visits <= args.start_visit:
+        parser.error("--max-visits must be greater than --start-visit")
     if not 0 < args.gpu_memory_utilization < 1:
         parser.error("--gpu-memory-utilization must be between 0 and 1")
+    if (
+        args.max_num_batched_tokens is not None
+        and args.max_num_batched_tokens < args.max_model_len
+    ):
+        parser.error("--max-num-batched-tokens must be at least --max-model-len")
     return args
 
 
@@ -85,16 +109,17 @@ def _attention_dimensions(config):
 
 
 def create_initial_peft_adapter(path: Path, model_name: str, rank: int, seed: int):
-    """Create PEFT's default Kaiming-A/zero-B Qwen3 LoRA without loading 4B weights."""
+    """Create a Kaiming-A/zero-B Qwen2/Qwen3/Llama LoRA without base weights."""
     from peft import LoraConfig
     from transformers import AutoConfig
 
     path.mkdir(parents=True, exist_ok=True)
     config = AutoConfig.from_pretrained(model_name, local_files_only=True)
     model_type = str(getattr(config, "model_type", ""))
-    if model_type not in ("qwen3", "qwen2"):
+    if model_type not in ("qwen3", "qwen2", "llama"):
         raise RuntimeError(
-            f"the vLLM ES tensor mapping currently supports Qwen2/Qwen3, got {model_type!r}"
+            "the vLLM ES tensor mapping currently supports Qwen2/Qwen3/Llama, "
+            f"got {model_type!r}"
         )
     hidden, q_width, kv_width = _attention_dimensions(config)
     intermediate = int(config.intermediate_size)
@@ -207,6 +232,7 @@ def build_rollout_prompts(item, population, seeds, permute, tok, instruct):
 
 def main():
     args = parse_args()
+    data_seed = args.seed if args.data_seed is None else args.data_seed
     # vLLM 0.11 exposes ``LLMEngine`` through the V1 implementation. Forcing
     # V0 makes EngineArgs select V1 while the environment reports V0, so the
     # engine aborts before loading the model.
@@ -215,8 +241,12 @@ def main():
     version = vllm_version_check()
 
     from transformers import AutoTokenizer
-    from vllm import LLM, SamplingParams
+    from vllm import SamplingParams
     from vllm.lora.request import LoRARequest
+    if os.environ.get("VLLM_REMOTE_HOST"):
+        from remote_vllm_engine import RemoteVLLMEngine as LLM
+    else:
+        from vllm import LLM
 
     output = Path(args.out)
     output.mkdir(parents=True, exist_ok=True)
@@ -238,7 +268,7 @@ def main():
     permute = args.permute_choices and args.dataset in ("mmlu", "medqa")
     train_prompts, _ = C.load_task(
         args.dataset, tok, instruct, args.eval_size, args.train_size,
-        args.seed, permute,
+        data_seed, permute,
     )
     C.set_task(args.dataset)
     expected_visits = len(train_prompts) * args.epochs
@@ -246,6 +276,14 @@ def main():
         raise SystemExit(
             f"--start-visit must be in [0, {expected_visits}], got {args.start_visit}"
         )
+    if args.max_visits is not None and args.max_visits > expected_visits:
+        raise SystemExit(
+            f"--max-visits={args.max_visits} exceeds the {expected_visits} "
+            "visits supplied by --train-size and --epochs"
+        )
+    target_visits = (
+        args.max_visits if args.max_visits is not None else expected_visits
+    )
 
     print(
         f"[es_direct_lora_vllm] vLLM={version} model={args.model} "
@@ -255,7 +293,7 @@ def main():
     print(
         f"[es_direct_lora_vllm] {len(train_prompts)} {args.dataset} prompts x "
         f"{args.epochs} epochs = {expected_visits} visits; "
-        f"starting at {args.start_visit}",
+        f"starting at {args.start_visit}; stopping at {target_visits}",
         flush=True,
     )
 
@@ -269,6 +307,7 @@ def main():
         max_lora_rank=args.lora_r,
         max_model_len=args.max_model_len,
         max_num_seqs=args.population,
+        max_num_batched_tokens=args.max_num_batched_tokens,
         gpu_memory_utilization=args.gpu_memory_utilization,
         enable_prefix_caching=False,
         enforce_eager=args.enforce_eager,
@@ -301,14 +340,20 @@ def main():
     visits = args.start_visit
     used = skipped = 0
     started = time.monotonic()
+    materialize_seconds = generation_seconds = update_seconds = 0.0
+    generated_tokens = length_limited = 0
     for epoch in range(args.epochs):
         for local_index, item in enumerate(train_prompts):
+            if visits >= target_visits:
+                break
             global_index = epoch * len(train_prompts) + local_index
             if global_index < args.start_visit:
                 continue
             visits += 1
             seeds = [10_000 * global_index + member for member in range(args.population)]
+            phase_started = time.monotonic()
             rpc_one(engine, "es_materialize", seeds, args.sigma)
+            materialize_seconds += time.monotonic() - phase_started
             prompts, permutations = build_rollout_prompts(
                 item, args.population, seeds, permute, tok, instruct
             )
@@ -321,12 +366,19 @@ def main():
                 )
                 for member in range(args.population)
             ]
+            phase_started = time.monotonic()
             generated = engine.generate(
                 prompts,
                 sampling,
                 lora_request=requests,
                 use_tqdm=False,
             )
+            generation_seconds += time.monotonic() - phase_started
+            for request_output in generated:
+                completion = request_output.outputs[0]
+                generated_tokens += len(completion.token_ids)
+                if completion.finish_reason == "length":
+                    length_limited += 1
             texts = [request_output.outputs[0].text for request_output in generated]
             answers = []
             for text, permutation in zip(texts, permutations):
@@ -342,6 +394,7 @@ def main():
                 skipped += 1
                 outcome = "skip"
             else:
+                phase_started = time.monotonic()
                 rpc_one(
                     engine,
                     "es_update",
@@ -350,21 +403,30 @@ def main():
                     args.alpha,
                     args.population,
                 )
+                update_seconds += time.monotonic() - phase_started
                 used += 1
                 outcome = "update"
 
-            if global_index % 10 == 0 or visits == expected_visits:
+            if global_index % 10 == 0 or visits == target_visits:
                 elapsed = max(time.monotonic() - started, 1e-6)
                 rate = (visits - args.start_visit) / elapsed * 3600
+                completed_visits = visits - args.start_visit
+                completed_rollouts = completed_visits * args.population
                 print(
                     f"  [progress] visit={visits} {outcome} p={confidence:.2f} "
                     f"mode={mode} used={used} skipped={skipped} "
-                    f"rate={rate:.1f} visits/h",
+                    f"rate={rate:.1f} visits/h avg_tokens="
+                    f"{generated_tokens / max(completed_rollouts, 1):.1f} "
+                    f"length_limit={length_limited / max(completed_rollouts, 1):.1%} "
+                    f"time_s(materialize/generate/update)="
+                    f"{materialize_seconds:.1f}/{generation_seconds:.1f}/{update_seconds:.1f}",
                     flush=True,
                 )
             if args.snap_every and visits % args.snap_every == 0:
                 snapshot = output / f"snap{visits:06d}"
                 save_centre(engine, snapshot, adapter_dir)
+        if visits >= target_visits:
+            break
 
     save_centre(engine, output, adapter_dir)
     print(

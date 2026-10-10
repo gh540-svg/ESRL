@@ -16,11 +16,14 @@ hf_*/
 
 # Experiment checkpoints and generated outputs
 out_*/
+out/
 outputs/
 checkpoints/
+.remote_vllm/
 results_*.json
 manifest_*.json
 submitted_*.txt
+submitted_*.tsv
 slurm_*.out
 slurm_*.err
 log_*.txt
