@@ -2,7 +2,7 @@
 
 # 📒 Overview
 
-**ESRL** is a  a continual test-time learning method designed to mitigate catastrophic forgetting during label-free continual adaptation. Specifically, ESRL constructs a population of locally perturbed policies around the current model to explore multiple neighboring parameter regions throughout adaptation, and then samples trajectories from those regions. Unlike trajectory-space exploration from a single evolving policy, this parameter-space population maintains diverse sources of self-generated supervision even when the central policy begins to drift. The resulting trajectories are aggregated into label-free group-relative learning signals to update the central student.
+This work proposes **ESRL** a continual test-time learning framework designed to mitigate catastrophic forgetting during label-free continual adaptation. Specifically, ESRL constructs a population of locally perturbed policies around the current model to explore multiple neighboring parameter regions throughout adaptation, and then samples trajectories from those regions. Unlike trajectory-space exploration from a single evolving policy, this parameter-space population maintains diverse sources of self-generated supervision even when the central policy begins to drift. The resulting trajectories are aggregated into label-free group-relative learning signals to update the central student.
 
 ---
 
