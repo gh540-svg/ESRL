@@ -2,16 +2,7 @@
 
 # 📒 Overview
 
-**ESRL** is a test-time learning method that separates parameter-space
-exploration from policy updating. A rank-16 LoRA policy is perturbed into 16
-temporary rollout teachers, the responses are ranked with a group-relative
-pseudo-reward, and the differentiable student is updated while remaining
-anchored to the base policy.
-
-The released implementation uses a persistent vLLM rollout engine and a
-separate PEFT training process. The paper configuration is pinned in the
-launchers so the four-model, three-domain matrix can be reproduced without
-manually reconstructing command-line arguments.
+**ESRL** is a  a continual test-time learning method designed to mitigate catastrophic forgetting during label-free continual adaptation. Specifically, ESRL constructs a population of locally perturbed policies around the current model to explore multiple neighboring parameter regions throughout adaptation, and then samples trajectories from those regions. Unlike trajectory-space exploration from a single evolving policy, this parameter-space population maintains diverse sources of self-generated supervision even when the central policy begins to drift. The resulting trajectories are aggregated into label-free group-relative learning signals to update the central student.
 
 ---
 
