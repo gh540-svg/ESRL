@@ -7,16 +7,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RepositoryConfigurationTests(unittest.TestCase):
-    def test_only_requested_methods_are_exposed(self):
-        launcher = (ROOT / "scripts" / "slurm_two_h200.sh").read_text()
-        self.assertIn("esrl|es_direct|sft", launcher)
-        for excluded in ("train_ttrl", "train_echo", "train_evol_rl"):
-            self.assertNotIn(excluded, launcher.lower())
+    def test_esrl_is_the_only_trainer(self):
         trainer_names = sorted(path.name for path in (ROOT / "src").glob("train_*.py"))
-        self.assertEqual(
-            ["train_es_direct.py", "train_esrl.py", "train_sft.py"],
-            trainer_names,
-        )
+        self.assertEqual(["train_esrl.py"], trainer_names)
+        launcher = (ROOT / "scripts" / "slurm_two_h200.sh").read_text()
+        self.assertIn("train_esrl.py", launcher)
+
+    def test_single_seed_matrix(self):
+        submitter = (ROOT / "scripts" / "submit_matrix.sh").read_text()
+        self.assertIn("SEED=1", submitter)
+        self.assertNotRegex(submitter, r"for seed in")
+        self.assertIn("Submitted 12 ESRL seed-1 jobs", submitter)
 
     def test_two_h200_allocation(self):
         launcher = (ROOT / "scripts" / "slurm_two_h200.sh").read_text()
@@ -26,14 +27,13 @@ class RepositoryConfigurationTests(unittest.TestCase):
 
     def test_token_limits_are_pinned(self):
         launcher = (ROOT / "scripts" / "slurm_two_h200.sh").read_text()
+        trainer = (ROOT / "src" / "train_esrl.py").read_text()
         self.assertIn("--max-new 8196", launcher)
         self.assertIn("--max-model-len 12292", launcher)
-        for trainer in ("train_esrl.py", "train_es_direct.py", "train_sft.py"):
-            text = (ROOT / "src" / trainer).read_text()
-            self.assertRegex(text, r'--max-new"?, type=int, default=8196')
-            self.assertRegex(text, r'--max-model-len"?, type=int, default=12292')
+        self.assertRegex(trainer, r'--max-new"?, type=int, default=8196')
+        self.assertRegex(trainer, r'--max-model-len"?, type=int, default=12292')
 
-    def test_esrl_name_replaces_old_public_name(self):
+    def test_old_public_name_is_absent(self):
         public_files = list((ROOT / "src").glob("*.py")) + list(
             (ROOT / "scripts").glob("*.sh")
         )

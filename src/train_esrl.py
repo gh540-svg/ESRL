@@ -22,7 +22,7 @@ import common as C
 import esrl_core as core
 from remote_vllm_engine import adapter_sync_parent
 from vllm_utils import request_to_sequence
-from train_es_direct import (
+from vllm_adapter import (
     adapter_scale,
     create_initial_peft_adapter,
     rpc_one,

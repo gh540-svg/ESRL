@@ -1,7 +1,6 @@
 #!/bin/bash -l
-# One training H200 plus one remote-vLLM rollout H200.
-# Usage: sbatch scripts/slurm_two_h200.sh METHOD DOMAIN MODEL_KEY [RUN_TAG [SEED]]
-# METHOD: esrl | es_direct | sft
+# One training H200 plus one remote-vLLM rollout H200 for ESRL.
+# Usage: sbatch scripts/slurm_two_h200.sh DOMAIN MODEL_KEY [RUN_TAG [SEED]]
 
 #SBATCH --partition=hopper140
 #SBATCH --nodes=2
@@ -15,16 +14,10 @@
 
 set -euo pipefail
 
-METHOD="${1:?METHOD is required: esrl, es_direct, or sft}"
-DOMAIN="${2:?DOMAIN is required: math, knowledge, or medical}"
-MODEL_KEY="${3:-4b}"
-RUN_TAG="${4:-run_$(date +%Y%m%d_%H%M%S)}"
-SEED="${5:-0}"
-
-case "$METHOD" in
-    esrl|es_direct|sft) ;;
-    *) echo "unsupported method: $METHOD" >&2; exit 2 ;;
-esac
+DOMAIN="${1:?DOMAIN is required: math, knowledge, or medical}"
+MODEL_KEY="${2:-4b}"
+RUN_TAG="${3:-run_$(date +%Y%m%d_%H%M%S)}"
+SEED="${4:-1}"
 
 case "$MODEL_KEY" in
     0p6b) MODEL_NAME="Qwen/Qwen3-0.6B-Base" ;;
@@ -108,7 +101,7 @@ trap cleanup EXIT INT TERM
 
 echo "[two-h200] training node: $TRAIN_NODE"
 echo "[two-h200] rollout node:  $ROLLOUT_NODE"
-echo "[config] method=$METHOD domain=$DOMAIN model=$MODEL_KEY seed=$SEED"
+echo "[config] method=esrl domain=$DOMAIN model=$MODEL_KEY seed=$SEED"
 echo "[config] max_new_tokens=8196 max_model_len=12292 population=16"
 
 (
@@ -134,11 +127,9 @@ done
     exit 1
 }
 
-ARM="${METHOD}_${MODEL_KEY}_train_${DOMAIN}_n16_${RUN_TAG}_seed${SEED}"
+ARM="esrl_${MODEL_KEY}_train_${DOMAIN}_n16_${RUN_TAG}_seed${SEED}"
 OUTPUT="$OUTPUT_ROOT/$ARM"
-TRAINER="train_${METHOD}.py"
-
-COMMON_ARGS=(
+ARGS=(
     --model "$MODEL_NAME"
     --dataset "$DATASET"
     --out "$OUTPUT"
@@ -146,46 +137,29 @@ COMMON_ARGS=(
     --eval-size "$EVAL_SIZE"
     --epochs "$EPOCHS"
     --population 16
+    --rollouts-per-member 1
     --temp 0.8
     --max-new 8196
     --p-high 0.95
     --lora-r 16
+    --lr 1e-5
+    --kl-lambda 0.001
+    --block-size 10
+    --prompt-update-batch-size 2
+    --sigma 0.001
     --snap-every 500
     --max-visits 2000
     --dtype bfloat16
     --seed "$SEED"
     --data-seed 0
+    --rollout-prompt-batch-size 2
     --max-model-len 12292
+    --max-num-seqs 32
     --gpu-memory-utilization 0.40
 )
 if [[ "$DOMAIN" != math ]]; then
-    COMMON_ARGS+=(--permute-choices)
+    ARGS+=(--permute-choices)
 fi
-
-case "$METHOD" in
-    esrl)
-        METHOD_ARGS=(
-            --rollouts-per-member 1
-            --lr 1e-5
-            --kl-lambda 0.001
-            --block-size 10
-            --prompt-update-batch-size 2
-            --sigma 0.001
-            --rollout-prompt-batch-size 2
-            --max-num-seqs 32
-        )
-        ;;
-    es_direct)
-        METHOD_ARGS=(
-            --rollouts-per-member 1
-            --sigma 0.001
-            --alpha 0.0005
-        )
-        ;;
-    sft)
-        METHOD_ARGS=(--lr 5e-5 --max-num-seqs 16)
-        ;;
-esac
 
 cd "$SRC_DIR"
 srun --nodes=1 --ntasks=1 --exclusive --nodelist="$TRAIN_NODE" \
@@ -196,7 +170,6 @@ srun --nodes=1 --ntasks=1 --exclusive --nodelist="$TRAIN_NODE" \
     VLLM_REMOTE_AUTH="$AUTH" \
     VLLM_REMOTE_CONNECT_TIMEOUT=300 \
     VLLM_SHARED_TMPDIR="$SHARED_ADAPTER_DIR" \
-    "$PYTHON_ENV/bin/python" -u "$TRAINER" \
-    "${COMMON_ARGS[@]}" "${METHOD_ARGS[@]}"
+    "$PYTHON_ENV/bin/python" -u train_esrl.py "${ARGS[@]}"
 
 echo "[two-h200] complete: $ARM"
