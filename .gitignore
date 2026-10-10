@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Hugging Face and model artifacts
+.hf/
+hf_*/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.tar
+*.tar.gz
+
+# Experiment checkpoints and generated outputs
+out_*/
+outputs/
+checkpoints/
+results_*.json
+manifest_*.json
+submitted_*.txt
+slurm_*.out
+slurm_*.err
+log_*.txt
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
